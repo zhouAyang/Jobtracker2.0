@@ -12,7 +12,7 @@ import {
   generateAnswerDraft, 
   reanalyzeResume, 
   generateMoreQuestions 
-} from "./src/lib/ai-service.js";
+} from "./src/lib/ai-service.ts";
 
 dotenv.config();
 
