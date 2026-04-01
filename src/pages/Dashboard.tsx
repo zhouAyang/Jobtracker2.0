@@ -4,16 +4,18 @@ import { Plus, Clock, CheckCircle2, ArrowRight, Loader2 } from 'lucide-react';
 import { JobTask } from '../types';
 import { motion } from 'motion/react';
 import { cn } from '../lib/utils';
-import { storage } from '../lib/storage';
 
 export function Dashboard() {
   const [tasks, setTasks] = useState<JobTask[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const taskList = storage.getTasks();
-    setTasks(taskList);
-    setLoading(false);
+    fetch('/api/tasks')
+      .then(res => res.json())
+      .then(data => {
+        setTasks(data);
+        setLoading(false);
+      });
   }, []);
 
   const activeTasks = tasks.filter(t => t.taskStatus !== 'ready');

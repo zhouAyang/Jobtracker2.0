@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Briefcase, Building2, Link as LinkIcon, FileText, Loader2, ArrowRight } from 'lucide-react';
-import { parseJD } from '../lib/ai';
+import { parseJD } from '../lib/gemini';
 
 export function NewTask() {
   const [jdText, setJdText] = useState('');

@@ -10,7 +10,7 @@ import {
   PenTool
 } from 'lucide-react';
 import { JobTask, BaseResume, ResumeSuggestion, TailoredResumeVersion, InterviewPrep, InterviewQuestion, ApplicationRecord } from '../types';
-import { analyzeResume, generateTailoredResume, researchCompany, generateAnswerDraft, reanalyzeResume, generateMoreQuestions } from '../lib/ai';
+import { analyzeResume, generateTailoredResume, researchCompany, generateAnswerDraft, reanalyzeResume, generateMoreQuestions } from '../lib/gemini';
 import { ResumeEditor } from '../components/ResumeEditor';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
@@ -102,11 +102,11 @@ export function TaskWorkspace() {
       const resume = resumes.find(r => r.id === resumeId);
       if (!resume || !task?.jdAnalysis) return;
 
-      // Update task to suggesting
+      // Update task
       await updateTask({ baseResumeId: resumeId, taskStatus: 'suggesting', progressStep: 3 });
 
       // Analyze resume with Gemini
-      const { suggestions: newSuggestions } = await analyzeResume(resume.rawContent, task.jdAnalysis);
+      const { sections, suggestions: newSuggestions } = await analyzeResume(resume.rawContent, task.jdAnalysis);
 
       // Save suggestions
       const suggestionsToSave = newSuggestions.map(s => ({
@@ -115,49 +115,17 @@ export function TaskWorkspace() {
         baseResumeId: resumeId
       }));
       
-      const suggRes = await fetch('/api/suggestions', {
+      const res = await fetch('/api/suggestions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(suggestionsToSave)
       });
-      const savedSuggestions = await suggRes.json();
+      const savedSuggestions = await res.json();
       setSuggestions(savedSuggestions);
 
-      // Automatically proceed to tailoring
-      setActionLoading('generating-resume');
-      await updateTask({ taskStatus: 'tailoring', progressStep: 5 });
-
-      const htmlContent = await generateTailoredResume(resume, savedSuggestions);
-
-      const tailoredRes = await fetch('/api/tailored-resumes', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          taskId: id,
-          baseResumeId: resume.id,
-          versionName: `Tailored for ${task?.companyName}`,
-          htmlContent,
-          finalSectionOrder: resume.parsedSections.map(s => s.title)
-        })
-      });
-      const newTailored = await tailoredRes.json();
-      setTailoredResume(newTailored);
-
-      await updateTask({ tailoredResumeVersionId: newTailored.id, taskStatus: 'customizing', progressStep: 6 });
-      
-      // Automatically create application record
-      await fetch('/api/applications', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          taskId: id,
-          baseResumeId: resume.id,
-          tailoredResumeVersionId: newTailored.id,
-          status: 'tailored'
-        })
-      });
+      await updateTask({ taskStatus: 'suggested', progressStep: 4 });
     } catch (error) {
-      console.error('Error analyzing and tailoring resume:', error);
+      console.error('Error analyzing resume:', error);
     } finally {
       setActionLoading(null);
     }
@@ -501,7 +469,8 @@ export function TaskWorkspace() {
   const steps = [
     { label: 'JD 解析', status: task.progressStep >= 2 ? 'complete' : 'current' },
     { label: '选择简历', status: task.progressStep >= 3 ? 'complete' : task.progressStep === 2 ? 'current' : 'upcoming' },
-    { label: '定制编辑', status: task.progressStep >= 6 ? 'complete' : task.progressStep >= 3 ? 'current' : 'upcoming' },
+    { label: '修改建议', status: task.progressStep >= 4 ? 'complete' : task.progressStep === 3 ? 'current' : 'upcoming' },
+    { label: '定制编辑', status: task.progressStep >= 6 ? 'complete' : task.progressStep === 5 ? 'current' : 'upcoming' },
     { label: '面试准备', status: task.progressStep >= 8 ? 'complete' : task.progressStep === 7 ? 'current' : 'upcoming' },
   ];
 
@@ -718,8 +687,82 @@ export function TaskWorkspace() {
               </section>
             )}
 
-            {/* Step 3-6: Tailored Resume Preview (Draft Ready) */}
-            {activeTab === 'resume' && task.progressStep >= 3 && task.progressStep < 7 && (
+            {/* Step 3 & 4: Suggestions */}
+            {activeTab === 'resume' && task.progressStep >= 3 && task.progressStep <= 4 && (
+              <section className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                <div className="p-6 border-b border-gray-50 flex justify-between items-center bg-gray-50/50">
+                  <h2 className="font-bold text-gray-900 flex items-center gap-2">
+                    <Edit3 className="w-5 h-5 text-indigo-600" />
+                    修改建议
+                  </h2>
+                  {task.progressStep === 3 ? (
+                    <div className="flex items-center gap-2 text-indigo-600 text-xs font-bold">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Agent 正在思考...
+                    </div>
+                  ) : (
+                    <button
+                      onClick={handleGenerateTailoredResume}
+                      disabled={!!actionLoading}
+                      className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-xs font-bold hover:bg-indigo-700 transition-colors flex items-center gap-2"
+                    >
+                      {actionLoading === 'generating-resume' ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+                      进入岗位定制编辑
+                    </button>
+                  )}
+                </div>
+                <div className="p-6 space-y-4">
+                  {suggestions.length === 0 && task.progressStep === 3 ? (
+                    <div className="py-12 flex flex-col items-center justify-center text-gray-400">
+                      <Loader2 className="w-8 h-8 animate-spin mb-4" />
+                      <p className="text-sm">Agent 正在将您的简历与 JD 要求进行对比...</p>
+                    </div>
+                  ) : (
+                    suggestions.map((s, idx) => (
+                      <div key={s.id} className={cn(
+                        "p-4 rounded-xl border transition-all",
+                        s.status === 'accepted' ? "bg-emerald-50 border-emerald-200" :
+                        s.status === 'rejected' ? "bg-red-50 border-red-100 opacity-60" :
+                        "bg-white border-gray-100"
+                      )}>
+                        <div className="flex justify-between items-start gap-4">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">模块: {s.sectionName}</span>
+                              {s.status === 'accepted' && <span className="text-[10px] font-bold text-emerald-600 flex items-center gap-1"><Check className="w-3 h-3" /> 已接受</span>}
+                            </div>
+                            <p className="text-sm text-gray-700 leading-relaxed">{s.suggestionText}</p>
+                          </div>
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => handleSuggestionStatus(s.id, 'accepted')}
+                              className={cn(
+                                "w-8 h-8 rounded-lg flex items-center justify-center transition-colors",
+                                s.status === 'accepted' ? "bg-emerald-500 text-white" : "bg-gray-100 text-gray-400 hover:bg-emerald-100 hover:text-emerald-600"
+                              )}
+                            >
+                              <Check className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => handleSuggestionStatus(s.id, 'rejected')}
+                              className={cn(
+                                "w-8 h-8 rounded-lg flex items-center justify-center transition-colors",
+                                s.status === 'rejected' ? "bg-red-500 text-white" : "bg-gray-100 text-gray-400 hover:bg-red-100 hover:text-red-600"
+                              )}
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </section>
+            )}
+
+            {/* Step 5 & 6: Tailored Resume Preview */}
+            {activeTab === 'resume' && task.progressStep >= 6 && (
               <section className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
                 <div className="p-6 border-b border-gray-50 flex justify-between items-center bg-gray-50/50">
                   <h2 className="font-bold text-gray-900 flex items-center gap-2">

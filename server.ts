@@ -3,7 +3,6 @@ import { createServer as createViteServer } from "vite";
 import path from "path";
 import { fileURLToPath } from "url";
 import dotenv from "dotenv";
-import { callKimi } from "./server/kimiService.js";
 
 dotenv.config();
 
@@ -219,17 +218,6 @@ async function startServer() {
     });
     res.json(tasksWithApp);
   });
-
-  app.post("/api/ai/proxy", async (req, res) => {
-    const { task, content } = req.body;
-    try {
-      const result = await callKimi(task, content);
-      res.json({ result });
-    } catch (error: any) {
-      console.error("AI Proxy Error:", error);
-      res.status(500).json({ error: error.message });
-    }
-  });
   app.get("/api/tasks/:id", (req, res) => {
     const task = tasks.find(t => t.id === req.params.id);
     res.json(task || null);
@@ -408,9 +396,6 @@ async function startServer() {
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on http://localhost:${PORT}`);
   });
-
-  return app;
 }
 
-const appPromise = startServer();
-export default appPromise;
+startServer();
