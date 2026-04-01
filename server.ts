@@ -1,10 +1,16 @@
 import express from "express";
 import { createServer as createViteServer } from "vite";
 import path from "path";
+import fs from "fs";
 import { fileURLToPath } from "url";
 import dotenv from "dotenv";
 
 dotenv.config();
+
+// Default to production if dist exists and NODE_ENV is not set
+if (!process.env.NODE_ENV && fs.existsSync(path.join(process.cwd(), "dist"))) {
+  process.env.NODE_ENV = "production";
+}
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -390,11 +396,12 @@ if (process.env.NODE_ENV !== "production") {
   });
 }
 
-// Start server if not in Vercel environment
-if (!process.env.VERCEL) {
-  const PORT = 3000;
+// Start server
+const PORT = 3000;
+if (!process.env.VERCEL || process.env.VERCEL === "false") {
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on http://localhost:${PORT}`);
+    console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
   });
 }
 
