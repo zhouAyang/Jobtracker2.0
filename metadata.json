@@ -1,0 +1,5 @@
+{
+  "name": "JobTracker 求职助手",
+  "description": "一个面向求职场景的任务型 AI Agent 工作台，支持从 JD 解析到面试准备的全流程。",
+  "requestFramePermissions": []
+}
