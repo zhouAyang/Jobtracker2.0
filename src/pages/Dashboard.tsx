@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Plus, Clock, CheckCircle2, ArrowRight, Loader2 } from 'lucide-react';
+import { Plus, Clock, CheckCircle2, ArrowRight, Loader2, Trash2 } from 'lucide-react';
 import { JobTask } from '../types';
 import { motion } from 'motion/react';
 import { cn } from '../lib/utils';
@@ -15,6 +15,13 @@ export function Dashboard() {
     setTasks(taskList);
     setLoading(false);
   }, []);
+
+  const handleDeleteTask = (e: React.MouseEvent, taskId: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    storage.deleteTask(taskId);
+    setTasks(storage.getTasks());
+  };
 
   const activeTasks = tasks.filter(t => t.taskStatus !== 'ready');
   const recentTasks = tasks.filter(t => t.taskStatus === 'ready').slice(0, 5);
@@ -72,17 +79,26 @@ export function Dashboard() {
                           <h4 className="font-bold text-gray-900 group-hover:text-indigo-600 transition-colors">{task.jobTitle}</h4>
                           <p className="text-sm text-gray-500">{task.companyName}</p>
                         </div>
-                        <span className="px-3 py-1 bg-indigo-50 text-indigo-700 text-xs font-medium rounded-full capitalize">
-                          {task.taskStatus === 'created' ? '已创建' :
-                           task.taskStatus === 'parsing' ? '解析中' :
-                           task.taskStatus === 'parsed' ? '已解析' :
-                           task.taskStatus === 'suggesting' ? '建议生成中' :
-                           task.taskStatus === 'suggested' ? '已有建议' :
-                           task.taskStatus === 'tailoring' ? '简历定制中' :
-                           task.taskStatus === 'tailored' ? '简历已生成' :
-                           task.taskStatus === 'researching' ? '调研中' :
-                           task.taskStatus === 'ready' ? '准备就绪' : task.taskStatus}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="px-3 py-1 bg-indigo-50 text-indigo-700 text-xs font-medium rounded-full capitalize">
+                            {task.taskStatus === 'created' ? '已创建' :
+                             task.taskStatus === 'parsing' ? '解析中' :
+                             task.taskStatus === 'parsed' ? '已解析' :
+                             task.taskStatus === 'suggesting' ? '建议生成中' :
+                             task.taskStatus === 'suggested' ? '已有建议' :
+                             task.taskStatus === 'tailoring' ? '简历定制中' :
+                             task.taskStatus === 'tailored' ? '简历已生成' :
+                             task.taskStatus === 'researching' ? '调研中' :
+                             task.taskStatus === 'ready' ? '准备就绪' : task.taskStatus}
+                          </span>
+                          <button
+                            onClick={(e) => handleDeleteTask(e, task.id)}
+                            className="text-gray-400 hover:text-red-500 transition-colors p-1"
+                            title="删除任务"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
                       </div>
                       <div className="flex items-center gap-4">
                         <div className="flex items-center gap-1.5 px-3 py-1 bg-gray-50 text-gray-600 text-xs font-medium rounded-lg border border-gray-100">
