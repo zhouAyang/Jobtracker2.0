@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, FileText, Trash2, Loader2, CheckCircle2 } from 'lucide-react';
 import { BaseResume } from '../types';
+import { storage } from '../lib/storage';
 
 export function ResumeLibrary() {
   const [resumes, setResumes] = useState<BaseResume[]>([]);
@@ -10,35 +11,42 @@ export function ResumeLibrary() {
   const [newContent, setNewContent] = useState('');
 
   useEffect(() => {
-    fetchResumes();
-  }, []);
-
-  const fetchResumes = async () => {
-    const res = await fetch('/api/resumes');
-    const data = await res.json();
-    setResumes(data);
+    const resumeList = storage.getResumes();
+    setResumes(resumeList);
     setLoading(false);
-  };
+  }, []);
 
   const handleAddResume = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newName || !newContent) return;
 
-    const res = await fetch('/api/resumes', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+    try {
+      const newResume: BaseResume = {
+        id: crypto.randomUUID(),
         name: newName,
         rawContent: newContent,
-        parsedSections: [] // In a real app, we'd parse this
-      })
-    });
+        parsedSections: [],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
 
-    if (res.ok) {
+      storage.saveResume(newResume);
+      setResumes(storage.getResumes());
       setNewName('');
       setNewContent('');
       setIsAdding(false);
-      fetchResumes();
+    } catch (error) {
+      console.error("Error adding resume:", error);
+    }
+  };
+
+  const handleDeleteResume = async (id: string) => {
+    if (!window.confirm('确定要删除这份简历吗？')) return;
+    try {
+      storage.deleteResume(id);
+      setResumes(storage.getResumes());
+    } catch (error) {
+      console.error("Error deleting resume:", error);
     }
   };
 
@@ -132,7 +140,10 @@ export function ResumeLibrary() {
                     <p className="text-xs text-gray-400">添加于 {new Date(resume.createdAt).toLocaleDateString()}</p>
                   </div>
                 </div>
-                <button className="text-gray-400 hover:text-red-500 transition-colors">
+                <button 
+                  onClick={() => handleDeleteResume(resume.id)}
+                  className="text-gray-400 hover:text-red-500 transition-colors"
+                >
                   <Trash2 className="w-5 h-5" />
                 </button>
               </div>
