@@ -14,6 +14,7 @@ import { analyzeResume, generateTailoredResume, researchCompany, generateAnswerD
 import { ResumeEditor } from '../components/ResumeEditor';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
+import { storage } from '../lib/storage';
 
 export function TaskWorkspace() {
   const { id } = useParams<{ id: string }>();
@@ -41,43 +42,25 @@ export function TaskWorkspace() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [taskRes, resumesRes, suggestionsRes, tailoredRes, prepRes, appRes] = await Promise.all([
-        fetch(`/api/tasks/${id}`),
-        fetch('/api/resumes'),
-        fetch(`/api/suggestions/${id}`),
-        fetch(`/api/tailored-resumes/${id}`),
-        fetch(`/api/interview-prep/${id}`),
-        fetch(`/api/applications`)
-      ]);
-
-      const safeJson = async (res: Response) => {
-        if (!res.ok) return null;
-        const text = await res.text();
-        if (!text) return null;
-        try {
-          return JSON.parse(text);
-        } catch (e) {
-          console.error('JSON parse error:', e, 'Text:', text);
-          return null;
-        }
-      };
-
-      const taskData = await safeJson(taskRes);
+      if (!id) return;
+      const taskData = storage.getTask(id);
+      if (!taskData) {
+        navigate('/');
+        return;
+      }
       setTask(taskData);
-      setResumes(await safeJson(resumesRes) || []);
-      setSuggestions(await safeJson(suggestionsRes) || []);
-      setTailoredResume(await safeJson(tailoredRes));
-      setInterviewPrep(await safeJson(prepRes));
+      setResumes(storage.getResumes());
+      setSuggestions(storage.getSuggestions(id));
+      setTailoredResume(storage.getTailoredResume(id));
+      setInterviewPrep(storage.getInterviewPrep(id));
       
-      const apps = await safeJson(appRes) || [];
+      const apps = storage.getApplications();
       setApplication(apps.find((a: ApplicationRecord) => a.taskId === id) || null);
 
       // Auto-switch tab based on progress
-      if (taskData) {
-        if (taskData.progressStep >= 7) setActiveTab('interview');
-        else if (taskData.progressStep >= 3) setActiveTab('resume');
-        else setActiveTab('jd');
-      }
+      if (taskData.progressStep >= 7) setActiveTab('interview');
+      else if (taskData.progressStep >= 3) setActiveTab('resume');
+      else setActiveTab('jd');
     } catch (error) {
       console.error('Error fetching workspace data:', error);
     } finally {
@@ -86,12 +69,9 @@ export function TaskWorkspace() {
   };
 
   const updateTask = async (updates: Partial<JobTask>) => {
-    const res = await fetch(`/api/tasks/${id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(updates)
-    });
-    const updatedTask = await res.json();
+    if (!task) return;
+    const updatedTask = { ...task, ...updates, updatedAt: new Date().toISOString() };
+    storage.saveTask(updatedTask);
     setTask(updatedTask);
     return updatedTask;
   };
@@ -100,28 +80,25 @@ export function TaskWorkspace() {
     setActionLoading('analyzing-resume');
     try {
       const resume = resumes.find(r => r.id === resumeId);
-      if (!resume || !task?.jdAnalysis) return;
+      if (!resume || !task?.jdAnalysis || !id) return;
 
       // Update task
       await updateTask({ baseResumeId: resumeId, taskStatus: 'suggesting', progressStep: 3 });
 
-      // Analyze resume with Gemini
+      // Analyze resume with AI
       const { sections, suggestions: newSuggestions } = await analyzeResume(resume.rawContent, task.jdAnalysis);
 
       // Save suggestions
       const suggestionsToSave = newSuggestions.map(s => ({
         ...s,
+        id: crypto.randomUUID(),
         taskId: id,
-        baseResumeId: resumeId
+        baseResumeId: resumeId,
+        status: 'pending' as const
       }));
       
-      const res = await fetch('/api/suggestions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(suggestionsToSave)
-      });
-      const savedSuggestions = await res.json();
-      setSuggestions(savedSuggestions);
+      storage.saveSuggestions(suggestionsToSave);
+      setSuggestions(storage.getSuggestions(id));
 
       await updateTask({ taskStatus: 'suggested', progressStep: 4 });
     } catch (error) {
@@ -132,52 +109,46 @@ export function TaskWorkspace() {
   };
 
   const handleSuggestionStatus = async (suggestionId: string, status: ResumeSuggestion['status']) => {
-    const res = await fetch(`/api/suggestions/${suggestionId}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status })
-    });
-    const updated = await res.json();
-    setSuggestions(prev => prev.map(s => s.id === suggestionId ? updated : s));
+    storage.updateSuggestion(suggestionId, { status });
+    if (id) setSuggestions(storage.getSuggestions(id));
   };
 
   const handleGenerateTailoredResume = async () => {
     setActionLoading('generating-resume');
     try {
       const baseResume = resumes.find(r => r.id === task?.baseResumeId);
-      if (!baseResume) return;
+      if (!baseResume || !id) return;
 
       await updateTask({ taskStatus: 'tailoring', progressStep: 5 });
 
       const htmlContent = await generateTailoredResume(baseResume, suggestions);
 
-      const res = await fetch('/api/tailored-resumes', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          taskId: id,
-          baseResumeId: baseResume.id,
-          versionName: `Tailored for ${task?.companyName}`,
-          htmlContent,
-          finalSectionOrder: baseResume.parsedSections.map(s => s.title)
-        })
-      });
-      const newTailored = await res.json();
+      const newTailored: TailoredResumeVersion = {
+        id: crypto.randomUUID(),
+        taskId: id,
+        baseResumeId: baseResume.id,
+        versionName: `Tailored for ${task?.companyName}`,
+        htmlContent,
+        finalSectionOrder: baseResume.parsedSections.map(s => s.title),
+        createdAt: new Date().toISOString()
+      };
+      
+      storage.saveTailoredResume(newTailored);
       setTailoredResume(newTailored);
 
       await updateTask({ tailoredResumeVersionId: newTailored.id, taskStatus: 'customizing', progressStep: 6 });
       
       // Automatically create application record
-      await fetch('/api/applications', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          taskId: id,
-          baseResumeId: baseResume.id,
-          tailoredResumeVersionId: newTailored.id,
-          status: 'tailored'
-        })
-      });
+      const newApp: ApplicationRecord = {
+        id: crypto.randomUUID(),
+        taskId: id,
+        baseResumeId: baseResume.id,
+        tailoredResumeVersionId: newTailored.id,
+        status: 'tailored',
+        updatedAt: new Date().toISOString()
+      };
+      storage.saveApplication(newApp);
+      setApplication(newApp);
 
       setIsEditingResume(true);
     } catch (error) {
@@ -188,24 +159,21 @@ export function TaskWorkspace() {
   };
 
   const handleReanalyze = async (htmlContent: string) => {
-    if (!task?.jdAnalysis || !task?.baseResumeId) return;
+    if (!task?.jdAnalysis || !task?.baseResumeId || !id) return;
     setActionLoading('reanalyzing');
     try {
       const newSuggestions = await reanalyzeResume(htmlContent, task.jdAnalysis);
       
       const suggestionsToSave = newSuggestions.map(s => ({
         ...s,
+        id: crypto.randomUUID(),
         taskId: id,
-        baseResumeId: task.baseResumeId
+        baseResumeId: task.baseResumeId,
+        status: 'pending' as const
       }));
       
-      const res = await fetch('/api/suggestions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(suggestionsToSave)
-      });
-      const savedSuggestions = await res.json();
-      setSuggestions(prev => [...prev, ...savedSuggestions]);
+      storage.saveSuggestions(suggestionsToSave);
+      setSuggestions(storage.getSuggestions(id));
     } catch (error) {
       console.error('Error re-analyzing resume:', error);
     } finally {
@@ -229,7 +197,7 @@ export function TaskWorkspace() {
   };
 
   const handleReopenEditing = async () => {
-    if (!task) return;
+    if (!task || !id) return;
     if (!showReopenConfirm) {
       setShowReopenConfirm(true);
       return;
@@ -237,15 +205,8 @@ export function TaskWorkspace() {
     
     setActionLoading('reopening');
     try {
-      const res = await fetch(`/api/tasks/${id}/reopen-editing`, {
-        method: 'POST'
-      });
-      const updatedTask = await res.json();
-      setTask(updatedTask);
-      
-      // Refresh tailored resume
-      const tailoredRes = await fetch(`/api/tailored-resumes/${id}`);
-      setTailoredResume(await tailoredRes.json());
+      // In local storage mode, we just update the status
+      const updatedTask = await updateTask({ taskStatus: 'customizing', progressStep: 6 });
       
       setIsEditingResume(true);
       setShowReopenConfirm(false);
@@ -257,7 +218,7 @@ export function TaskWorkspace() {
   };
 
   const handleGenerateMoreQuestions = async () => {
-    if (!interviewPrep || !task?.baseResumeId) return;
+    if (!interviewPrep || !task?.baseResumeId || !id) return;
     setActionLoading('generating-questions');
     try {
       const baseResume = resumes.find(r => r.id === task.baseResumeId);
@@ -269,12 +230,12 @@ export function TaskWorkspace() {
         interviewQuestionPrompt
       );
       
-      const res = await fetch(`/api/interview-prep/${id}/questions`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ questions: newQuestions })
-      });
-      const updatedPrep = await res.json();
+      const updatedPrep = {
+        ...interviewPrep,
+        interviewQuestions: [...interviewPrep.interviewQuestions, ...newQuestions],
+        updatedAt: new Date().toISOString()
+      };
+      storage.saveInterviewPrep(updatedPrep);
       setInterviewPrep(updatedPrep);
       setInterviewQuestionPrompt('');
     } catch (error) {
@@ -287,13 +248,8 @@ export function TaskWorkspace() {
   const handleSaveResume = async (htmlContent: string) => {
     if (!tailoredResume) return;
     try {
-      const res = await fetch(`/api/tailored-resumes/${tailoredResume.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ htmlContent })
-      });
-      const updated = await res.json();
-      setTailoredResume(updated);
+      storage.updateTailoredResume(tailoredResume.id, { htmlContent });
+      setTailoredResume({ ...tailoredResume, htmlContent });
     } catch (error) {
       console.error('Error saving resume:', error);
       throw error;
@@ -303,21 +259,19 @@ export function TaskWorkspace() {
   const handleResearchCompany = async () => {
     setActionLoading('researching');
     try {
-      if (!task) return;
+      if (!task || !id) return;
       await updateTask({ taskStatus: 'researching', progressStep: 7 });
 
       const prepData = await researchCompany(task.companyName, task.jobTitle);
       
-      const res = await fetch('/api/interview-prep', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...prepData,
-          taskId: id
-        })
-      });
-      const savedPrep = await res.json();
-      setInterviewPrep(savedPrep);
+      const newPrep: InterviewPrep = {
+        ...prepData,
+        id: crypto.randomUUID(),
+        taskId: id,
+        createdAt: new Date().toISOString()
+      };
+      storage.saveInterviewPrep(newPrep);
+      setInterviewPrep(newPrep);
 
       await updateTask({ taskStatus: 'ready', progressStep: 8 });
     } catch (error) {
@@ -328,16 +282,11 @@ export function TaskWorkspace() {
   };
 
   const handleUpdateApplicationStatus = async (status: ApplicationRecord['status'], silent = false) => {
-    if (!application) return;
+    if (!application || !id) return;
     if (!silent) setActionLoading('updating-app');
     try {
-      const res = await fetch(`/api/applications/task/${id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status })
-      });
-      const updatedApp = await res.json();
-      setApplication(updatedApp);
+      storage.updateApplication(id, { status });
+      setApplication({ ...application, status });
     } catch (error) {
       console.error('Error updating application status:', error);
     } finally {
