@@ -2,8 +2,6 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Briefcase, Building2, Link as LinkIcon, FileText, Loader2, ArrowRight } from 'lucide-react';
 import { parseJD } from '../lib/ai';
-import { storage } from '../lib/storage';
-import { JobTask } from '../types';
 
 export function NewTask() {
   const [jdText, setJdText] = useState('');
@@ -19,37 +17,38 @@ export function NewTask() {
 
     setIsParsing(true);
     try {
-      const taskId = crypto.randomUUID();
-      // Step 1: Create task in local storage
-      const newTask: JobTask = {
-        id: taskId,
-        companyName: companyName || 'Analyzing...',
-        jobTitle: jobTitle || 'Analyzing...',
-        jdText: jdText,
-        jobUrl,
-        taskStatus: 'parsing',
-        progressStep: 1,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      };
-      storage.saveTask(newTask);
+      // Step 1: Create task
+      const taskRes = await fetch('/api/tasks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          companyName: companyName || 'Analyzing...',
+          jobTitle: jobTitle || 'Analyzing...',
+          jdText,
+          jobUrl,
+          taskStatus: 'parsing',
+          progressStep: 1
+        })
+      });
+      const task = await taskRes.json();
 
-      // Step 2: Parse JD with AI
+      // Step 2: Parse JD with Gemini
       const analysisData = await parseJD(jdText);
       
-      // Update task with analysis in local storage
-      const updatedTask: JobTask = {
-        ...newTask,
-        companyName: analysisData.companyName,
-        jobTitle: analysisData.jobTitle,
-        jdAnalysis: analysisData.analysis,
-        taskStatus: 'parsed',
-        progressStep: 2,
-        updatedAt: new Date().toISOString()
-      };
-      storage.saveTask(updatedTask);
+      // Update task with analysis
+      await fetch(`/api/tasks/${task.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          companyName: analysisData.companyName,
+          jobTitle: analysisData.jobTitle,
+          jdAnalysis: analysisData.analysis,
+          taskStatus: 'parsed',
+          progressStep: 2
+        })
+      });
 
-      navigate(`/tasks/${taskId}`);
+      navigate(`/tasks/${task.id}`);
     } catch (error) {
       console.error('Error creating task:', error);
       setIsParsing(false);

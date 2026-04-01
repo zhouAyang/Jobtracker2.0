@@ -151,38 +151,35 @@ export async function analyzeResume(resumeContent: string, jdAnalysis: JDAnalysi
 }
 
 export async function generateTailoredResume(baseResume: any, suggestions: ResumeSuggestion[]): Promise<string> {
+  // If some are accepted, use only those. If none are accepted (initial draft), use all to show potential.
   const acceptedSuggestions = suggestions.filter(s => s.status === 'accepted');
-  if (openai) {
-    const prompt = `生成一份精简 HTML 格式的定制简历草稿。请使用中文。
+  const suggestionsToUse = acceptedSuggestions.length > 0 ? acceptedSuggestions : suggestions;
+  
+  const prompt = `生成一份精简 HTML 格式的定制简历草稿。请使用中文。
     基础简历: ${JSON.stringify(baseResume.parsedSections)}
-    已接受的修改建议: ${JSON.stringify(acceptedSuggestions)}
+    参考修改建议: ${JSON.stringify(suggestionsToUse.map(s => ({ section: s.sectionName, text: s.suggestionText })))}
     
     要求:
     1. 使用专业的、极简的样式（内联 CSS 或 Tailwind 类）。
     2. 注重清晰度和信息密度。
     3. 确保它看起来像一份真实的简历。
     4. 仅返回 HTML 内容。
-    5. 这是一个供用户进一步手动编辑的草稿，请确保内容真实且基于基础简历。`;
+    5. 这是一个供用户进一步手动编辑的草稿，请确保内容真实且基于基础简历。
+    6. 如果提供了修改建议，请在生成时尽可能合理地采纳这些建议。
+    7. 内容要精炼，总长度控制在 2000 字以内，避免生成过长的 HTML 代码。`;
 
+  if (openai) {
     const response = await openai.chat.completions.create({
       model: KIMI_MODEL,
       messages: [{ role: "user", content: prompt }],
+      max_tokens: 4000,
     });
 
     return response.choices[0].message.content || "";
   } else if (gemini) {
     const response = await gemini.models.generateContent({
       model: GEMINI_MODEL,
-      contents: `生成一份精简 HTML 格式的定制简历草稿。请使用中文。
-      基础简历: ${JSON.stringify(baseResume.parsedSections)}
-      已接受的修改建议: ${JSON.stringify(acceptedSuggestions)}
-      
-      要求:
-      1. 使用专业的、极简的样式（内联 CSS 或 Tailwind 类）。
-      2. 注重清晰度和信息密度。
-      3. 确保它看起来像一份真实的简历。
-      4. 仅返回 HTML 内容。
-      5. 这是一个供用户进一步手动编辑的草稿，请确保内容真实且基于基础简历。`,
+      contents: prompt,
     });
     return response.text || "";
   }

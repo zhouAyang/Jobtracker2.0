@@ -209,11 +209,11 @@ export function ResumeEditor({
             <div className="grid grid-cols-3 gap-2">
               <div className="bg-emerald-50 p-2 rounded-lg border border-emerald-100 text-center">
                 <div className="text-emerald-700 font-bold text-sm">{acceptedCount}</div>
-                <div className="text-[9px] text-emerald-600 uppercase font-bold">已接受</div>
+                <div className="text-[9px] text-emerald-600 uppercase font-bold">合适</div>
               </div>
               <div className="bg-red-50 p-2 rounded-lg border border-red-100 text-center">
                 <div className="text-red-700 font-bold text-sm">{rejectedCount}</div>
-                <div className="text-[9px] text-red-600 uppercase font-bold">已拒绝</div>
+                <div className="text-[9px] text-red-600 uppercase font-bold">不合适</div>
               </div>
               <div className="bg-gray-50 p-2 rounded-lg border border-gray-100 text-center">
                 <div className="text-gray-700 font-bold text-sm">{pendingCount}</div>
@@ -223,6 +223,12 @@ export function ResumeEditor({
           </div>
 
           <div className="flex-1 overflow-auto p-6 space-y-4">
+            <div className="p-3 bg-indigo-50 rounded-lg border border-indigo-100 mb-2">
+              <p className="text-[11px] text-indigo-700 leading-relaxed">
+                <span className="font-bold">注释：</span>
+                修改需用户在左侧在线编辑，选择是否合适，系统将根据您的反馈持续优化后续建议策略
+              </p>
+            </div>
             {suggestions.length === 0 ? (
               <div className="h-full flex flex-col items-center justify-center text-center p-8">
                 <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mb-4">
@@ -245,7 +251,7 @@ export function ResumeEditor({
                     </span>
                     {s.status === 'accepted' && (
                       <span className="text-[9px] font-bold text-emerald-600 flex items-center gap-0.5">
-                        <Check className="w-2.5 h-2.5" /> 已采纳
+                        <Check className="w-2.5 h-2.5" /> 合适
                       </span>
                     )}
                   </div>
@@ -263,7 +269,7 @@ export function ResumeEditor({
                       )}
                     >
                       <Check className="w-3.5 h-3.5" />
-                      接受
+                      合适
                     </button>
                     <button
                       onClick={() => onSuggestionStatus(s.id, 'rejected')}
@@ -273,7 +279,7 @@ export function ResumeEditor({
                       )}
                     >
                       <X className="w-3.5 h-3.5" />
-                      拒绝
+                      不合适
                     </button>
                   </div>
                 </div>
@@ -282,10 +288,10 @@ export function ResumeEditor({
             
             {/* Future Stats Placeholder */}
             <div className="pt-8 mt-8 border-t border-gray-100">
-              <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-4">建议采纳统计</h4>
+              <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-4">建议反馈统计</h4>
               <div className="space-y-3">
                 <div className="flex items-center justify-between text-xs">
-                  <span className="text-gray-500">建议采纳率</span>
+                  <span className="text-gray-500">合适率</span>
                   <span className="font-bold text-gray-900">
                     {suggestions.length > 0 ? Math.round((acceptedCount / suggestions.length) * 100) : 0}%
                   </span>

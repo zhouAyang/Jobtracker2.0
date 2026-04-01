@@ -26,6 +26,17 @@ export const storage = {
     }
     localStorage.setItem(TASKS_KEY, JSON.stringify(tasks));
   },
+  updateTask: (id: string, updates: Partial<JobTask>): JobTask | null => {
+    const tasks = storage.getTasks();
+    const index = tasks.findIndex(t => t.id === id);
+    if (index >= 0) {
+      const updated = { ...tasks[index], ...updates, updatedAt: new Date().toISOString() };
+      tasks[index] = updated;
+      localStorage.setItem(TASKS_KEY, JSON.stringify(tasks));
+      return updated;
+    }
+    return null;
+  },
   deleteTask: (id: string) => {
     const tasks = storage.getTasks().filter(t => t.id !== id);
     localStorage.setItem(TASKS_KEY, JSON.stringify(tasks));
