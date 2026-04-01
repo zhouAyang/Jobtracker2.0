@@ -4,6 +4,16 @@ import path from "path";
 import { fileURLToPath } from "url";
 import dotenv from "dotenv";
 
+import { 
+  parseJD, 
+  analyzeResume, 
+  generateTailoredResume, 
+  researchCompany, 
+  generateAnswerDraft, 
+  reanalyzeResume, 
+  generateMoreQuestions 
+} from "./src/lib/ai-service.js";
+
 dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
@@ -378,6 +388,77 @@ async function startServer() {
     }
   });
 
+  // AI API Routes
+  app.post("/api/ai/parse-jd", async (req, res) => {
+    try {
+      const { jdText } = req.body;
+      const result = await parseJD(jdText);
+      res.json(result);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/ai/analyze-resume", async (req, res) => {
+    try {
+      const { resumeContent, jdAnalysis } = req.body;
+      const result = await analyzeResume(resumeContent, jdAnalysis);
+      res.json(result);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/ai/generate-tailored-resume", async (req, res) => {
+    try {
+      const { baseResume, suggestions } = req.body;
+      const result = await generateTailoredResume(baseResume, suggestions);
+      res.json({ htmlContent: result });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/ai/research-company", async (req, res) => {
+    try {
+      const { companyName, jobTitle } = req.body;
+      const result = await researchCompany(companyName, jobTitle);
+      res.json(result);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/ai/generate-answer-draft", async (req, res) => {
+    try {
+      const { question, thinking, resumeContent } = req.body;
+      const result = await generateAnswerDraft(question, thinking, resumeContent);
+      res.json({ answerDraft: result });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/ai/reanalyze-resume", async (req, res) => {
+    try {
+      const { currentResumeHtml, jdAnalysis } = req.body;
+      const result = await reanalyzeResume(currentResumeHtml, jdAnalysis);
+      res.json(result);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/ai/generate-more-questions", async (req, res) => {
+    try {
+      const { companySummary, roleSummary, resumeContent, existingQuestions, userPrompt } = req.body;
+      const result = await generateMoreQuestions(companySummary, roleSummary, resumeContent, existingQuestions, userPrompt);
+      res.json(result);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
@@ -396,6 +477,9 @@ async function startServer() {
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on http://localhost:${PORT}`);
   });
+
+  return app;
 }
 
-startServer();
+const appPromise = startServer();
+export default appPromise;

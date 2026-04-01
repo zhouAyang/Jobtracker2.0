@@ -10,7 +10,7 @@ import {
   PenTool
 } from 'lucide-react';
 import { JobTask, BaseResume, ResumeSuggestion, TailoredResumeVersion, InterviewPrep, InterviewQuestion, ApplicationRecord } from '../types';
-import { analyzeResume, generateTailoredResume, researchCompany, generateAnswerDraft, reanalyzeResume, generateMoreQuestions } from '../lib/gemini';
+import { analyzeResume, generateTailoredResume, researchCompany, generateAnswerDraft, reanalyzeResume, generateMoreQuestions } from '../lib/ai';
 import { ResumeEditor } from '../components/ResumeEditor';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
