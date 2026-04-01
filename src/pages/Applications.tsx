@@ -7,7 +7,8 @@ import {
 } from 'lucide-react';
 import { ApplicationRecord, JobTask } from '../types';
 import { cn } from '../lib/utils';
-import { storage } from '../lib/storage';
+
+// Dummy comment to force re-write
 
 export function Applications() {
   const [applications, setApplications] = useState<(ApplicationRecord & { task?: JobTask })[]>([]);
@@ -20,8 +21,12 @@ export function Applications() {
 
   const fetchData = async () => {
     try {
-      const apps = storage.getApplications();
-      const tasks = storage.getTasks();
+      const [appRes, taskRes] = await Promise.all([
+        fetch('/api/applications'),
+        fetch('/api/tasks')
+      ]);
+      const apps = await appRes.json();
+      const tasks = await taskRes.json();
 
       const combined = apps.map((app: any) => ({
         ...app,
