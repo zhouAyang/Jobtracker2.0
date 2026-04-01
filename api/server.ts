@@ -11,7 +11,7 @@ import {
   generateAnswerDraft, 
   reanalyzeResume, 
   generateMoreQuestions 
-} from "./src/lib/ai-service";
+} from "../src/lib/ai-service.js";
 
 dotenv.config();
 

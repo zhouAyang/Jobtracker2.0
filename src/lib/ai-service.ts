@@ -1,6 +1,6 @@
 import OpenAI from "openai";
 import { GoogleGenAI, Type } from "@google/genai";
-import { JDAnalysis, ResumeSection, ResumeSuggestion, InterviewPrep, InterviewQuestion } from "../types";
+import { JDAnalysis, ResumeSection, ResumeSuggestion, InterviewPrep, InterviewQuestion } from "../types.js";
 
 const KIMI_API_KEY = process.env.KIMI_API_KEY;
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
